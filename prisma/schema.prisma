@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum SecurityEventType {
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  LOGOUT
+  REFRESH_TOKEN
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  PASSWORD_CHANGE
+  EMAIL_VERIFICATION
+  ACCOUNT_BLOCKED
+  ACCOUNT_UNBLOCKED
+  ROLE_CHANGE
+  RATE_LIMIT_TRIGGERED
+  SUSPICIOUS_REQUEST
+  ACCESS_DENIED
+  BRUTE_FORCE_DETECTED
+  SESSION_REVOKED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  PUBLISH
+  UNPUBLISH
+  ENROLL
+  UNENROLL
+  SUBMIT
+  BLOCK
+  UNBLOCK
+  ROLE_CHANGE
+  LOGIN
+  LOGOUT
+}
+
+// ─── User ───────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          Role     @default(STUDENT)
+  isActive      Boolean  @default(true)
+  isBlocked     Boolean  @default(false)
+  emailVerified Boolean  @default(false)
+  avatarUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  sessions               Session[]
+  coursesAsTeacher        Course[]               @relation("TeacherCourses")
+  enrollments             Enrollment[]
+  quizAttempts            QuizAttempt[]
+  securityEvents          SecurityEvent[]
+  auditLogs               AuditLog[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ─── Session ────────────────────────────────────────────
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  refreshToken String
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  isRevoked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+  @@map("sessions")
+}
+
+// ─── Course ─────────────────────────────────────────────
+
+model Course {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  category    String?
+  isPublished Boolean  @default(false)
+  thumbnail   String?
+  teacherId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     User         @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+  lessons     Lesson[]
+
+  @@index([teacherId])
+  @@index([isPublished])
+  @@map("courses")
+}
+
+// ─── Enrollment ─────────────────────────────────────────
+
+model Enrollment {
+  id         String   @id @default(uuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+// ─── Lesson ─────────────────────────────────────────────
+
+model Lesson {
+  id        String   @id @default(uuid())
+  courseId   String
+  title     String
+  content   String?
+  videoUrl  String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  materials Material[]
+  quizzes   Quiz[]
+
+  @@index([courseId])
+  @@map("lessons")
+}
+
+// ─── Material ───────────────────────────────────────────
+
+model Material {
+  id        String   @id @default(uuid())
+  lessonId  String
+  filename  String
+  filePath  String
+  mimeType  String?
+  fileSize  Int?
+  createdAt DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@map("materials")
+}
+
+// ─── Quiz ───────────────────────────────────────────────
+
+model Quiz {
+  id           String   @id @default(uuid())
+  lessonId     String
+  title        String
+  description  String?
+  passingScore Int      @default(60)
+  timeLimit    Int?     // minutes
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  lesson    Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions Question[]
+  attempts  QuizAttempt[]
+
+  @@index([lessonId])
+  @@map("quizzes")
+}
+
+// ─── Question ───────────────────────────────────────────
+
+model Question {
+  id     String @id @default(uuid())
+  quizId String
+  text   String
+  order  Int    @default(0)
+
+  quiz           Quiz               @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answerOptions  AnswerOption[]
+  attemptAnswers QuizAttemptAnswer[]
+
+  @@index([quizId])
+  @@map("questions")
+}
+
+// ─── AnswerOption ───────────────────────────────────────
+
+model AnswerOption {
+  id         String  @id @default(uuid())
+  questionId String
+  text       String
+  isCorrect  Boolean @default(false)
+
+  question       Question            @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attemptAnswers QuizAttemptAnswer[]
+
+  @@index([questionId])
+  @@map("answer_options")
+}
+
+// ─── QuizAttempt ────────────────────────────────────────
+
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  quizId      String
+  studentId   String
+  score       Float?
+  totalScore  Float?
+  passed      Boolean?
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+
+  quiz    Quiz                @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student User                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers QuizAttemptAnswer[]
+
+  @@index([quizId])
+  @@index([studentId])
+  @@map("quiz_attempts")
+}
+
+// ─── QuizAttemptAnswer ──────────────────────────────────
+
+model QuizAttemptAnswer {
+  id               String @id @default(uuid())
+  attemptId        String
+  questionId       String
+  selectedOptionId String
+
+  attempt        QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption AnswerOption @relation(fields: [selectedOptionId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@map("quiz_attempt_answers")
+}
+
+// ─── SecurityEvent ──────────────────────────────────────
+
+model SecurityEvent {
+  id         String            @id @default(uuid())
+  eventType  SecurityEventType
+  userId     String?
+  ipAddress  String?
+  userAgent  String?
+  details    Json?
+  occurredAt DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([eventType])
+  @@index([userId])
+  @@index([ipAddress])
+  @@map("security_events")
+}
+
+// ─── AuditLog ───────────────────────────────────────────
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  action       AuditAction
+  userId       String?
+  targetEntity String?
+  targetId     String?
+  details      Json?
+  ipAddress    String?
+  createdAt    DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── PasswordResetToken ─────────────────────────────────
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── EmailVerificationToken ─────────────────────────────
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
