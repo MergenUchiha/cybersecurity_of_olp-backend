@@ -144,11 +144,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
-
     // Store session with hashed refresh token
-    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-    await this.prisma.session.create({
+    const hashedRefreshToken = await bcrypt.hash('placeholder', 10);
+    const session = await this.prisma.session.create({
       data: {
         userId: user.id,
         refreshToken: hashedRefreshToken,
@@ -156,6 +154,15 @@ export class AuthService {
         userAgent,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role, session.id);
+
+    // Update session with real hashed refresh token
+    const realHashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { refreshToken: realHashedRefreshToken },
     });
 
     await this.securityEventsService.log({
@@ -212,18 +219,24 @@ export class AuthService {
     });
 
     const user = matchedSession.user;
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
 
     // Create new session
-    const hashedNewRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-    await this.prisma.session.create({
+    const newSession = await this.prisma.session.create({
       data: {
         userId: user.id,
-        refreshToken: hashedNewRefreshToken,
+        refreshToken: await bcrypt.hash('placeholder', 10),
         ipAddress,
         userAgent,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role, newSession.id);
+
+    // Update with real hashed refresh token
+    await this.prisma.session.update({
+      where: { id: newSession.id },
+      data: { refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
     });
 
     await this.securityEventsService.log({
@@ -409,8 +422,8 @@ export class AuthService {
     return user;
   }
 
-  private async generateTokens(userId: string, email: string, role: string) {
-    const payload = { sub: userId, email, role };
+  private async generateTokens(userId: string, email: string, role: string, sessionId?: string) {
+    const payload = { sub: userId, email, role, sid: sessionId };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
