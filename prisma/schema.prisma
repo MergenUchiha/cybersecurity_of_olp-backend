@@ -3,52 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ──────────────────────────────────────────────
-
-enum Role {
-  STUDENT
-  TEACHER
-  ADMIN
-}
-
-enum SecurityEventType {
-  LOGIN_SUCCESS
-  LOGIN_FAILURE
-  LOGOUT
-  REFRESH_TOKEN
-  PASSWORD_RESET_REQUEST
-  PASSWORD_RESET_COMPLETE
-  PASSWORD_CHANGE
-  EMAIL_VERIFICATION
-  ACCOUNT_BLOCKED
-  ACCOUNT_UNBLOCKED
-  ROLE_CHANGE
-  RATE_LIMIT_TRIGGERED
-  SUSPICIOUS_REQUEST
-  ACCESS_DENIED
-  BRUTE_FORCE_DETECTED
-  SESSION_REVOKED
-}
-
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  PUBLISH
-  UNPUBLISH
-  ENROLL
-  UNENROLL
-  SUBMIT
-  BLOCK
-  UNBLOCK
-  ROLE_CHANGE
-  LOGIN
-  LOGOUT
-}
+// ─── Note: enums replaced with String for SQLite compatibility ──
 
 // ─── User ───────────────────────────────────────────────
 
@@ -58,7 +17,7 @@ model User {
   password      String
   firstName     String
   lastName      String
-  role          Role     @default(STUDENT)
+  role          String   @default("STUDENT")
   isActive      Boolean  @default(true)
   isBlocked     Boolean  @default(false)
   emailVerified Boolean  @default(false)
@@ -268,11 +227,11 @@ model QuizAttemptAnswer {
 
 model SecurityEvent {
   id         String            @id @default(uuid())
-  eventType  SecurityEventType
+  eventType  String
   userId     String?
   ipAddress  String?
   userAgent  String?
-  details    Json?
+  details    String?
   occurredAt DateTime          @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -288,7 +247,7 @@ model SecurityEvent {
 
 model AuditLog {
   id           String      @id @default(uuid())
-  action       AuditAction
+  action       String
   userId       String?
   targetEntity String?
   targetId     String?

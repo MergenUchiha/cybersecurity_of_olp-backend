@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/constants';
 
 @Injectable()
 export class UsersService {
@@ -16,9 +16,9 @@ export class UsersService {
     if (role) where.role = role;
     if (search) {
       where.OR = [
-        { email: { contains: search, mode: 'insensitive' } },
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search } },
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
       ];
     }
 

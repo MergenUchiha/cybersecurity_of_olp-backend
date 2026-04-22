@@ -6,7 +6,13 @@
  * Prereq: npm install @faker-js/faker --save-dev
  */
 
-import { PrismaClient, Role, Course, User } from '@prisma/client';
+import { PrismaClient, Course, User } from '@prisma/client';
+
+const Role = {
+  STUDENT: 'STUDENT',
+  TEACHER: 'TEACHER',
+  ADMIN: 'ADMIN',
+} as const;
 import * as bcrypt from 'bcrypt';
 import { faker } from '@faker-js/faker';
 
@@ -386,15 +392,20 @@ async function main() {
               qi,
               correctIdx,
             );
-            await prisma.answerOption.createMany({
-              data: options.map((opt, oi) => ({
-                id: `opt-${qId}-${oi}`,
-                questionId: question.id,
-                text: opt,
-                isCorrect: oi === correctIdx,
-              })),
-              skipDuplicates: true,
-            });
+            for (const [oi, opt] of options.entries()) {
+              try {
+                await prisma.answerOption.upsert({
+                  where: { id: `opt-${qId}-${oi}` },
+                  update: {},
+                  create: {
+                    id: `opt-${qId}-${oi}`,
+                    questionId: question.id,
+                    text: opt,
+                    isCorrect: oi === correctIdx,
+                  },
+                });
+              } catch {}
+            }
           }
         }
       } catch {
@@ -494,19 +505,19 @@ async function main() {
             userAgent: faker.internet.userAgent(),
             details:
               eventType === 'LOGIN_FAILURE'
-                ? {
+                ? JSON.stringify({
                     reason: randomItem([
                       'Invalid password',
                       'Account not found',
                       'Account blocked',
                     ]),
                     email: user?.email ?? null,
-                  }
+                  })
                 : eventType === 'BRUTE_FORCE_DETECTED'
-                  ? {
+                  ? JSON.stringify({
                       reason: 'Too many failed attempts',
                       count: randomInt(5, 20),
-                    }
+                    })
                   : undefined,
             occurredAt,
           },
@@ -543,7 +554,7 @@ async function main() {
           userId: user.id,
           targetEntity: entity,
           targetId: faker.string.uuid(),
-          details: { note: faker.lorem.sentence() },
+          details: JSON.stringify({ note: faker.lorem.sentence() }),
           ipAddress: faker.internet.ipv4(),
           createdAt: faker.date.recent({ days: 30 }),
         },

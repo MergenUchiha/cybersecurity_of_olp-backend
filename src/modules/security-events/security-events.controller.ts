@@ -4,7 +4,7 @@ import { SecurityEventsService } from './security-events.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Role, SecurityEventType } from '@prisma/client';
+import { Role, SecurityEventType } from '../../common/constants';
 
 @ApiTags('security')
 @ApiBearerAuth()

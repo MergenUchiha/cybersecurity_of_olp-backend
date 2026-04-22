@@ -86,13 +86,15 @@ export class AnalyticsService {
 
   async getEventsByRole(days = 30) {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const events = await this.prisma.$queryRaw`
-      SELECT u.role, COUNT(se.id)::int as count
-      FROM security_events se
-      LEFT JOIN users u ON se."userId" = u.id
-      WHERE se."occurredAt" >= ${since}
-      GROUP BY u.role
-    ` as any[];
+    const sinceIso = since.toISOString();
+    const events = await this.prisma.$queryRawUnsafe(
+      `SELECT u.role, CAST(COUNT(se.id) AS INTEGER) as count
+       FROM security_events se
+       LEFT JOIN users u ON se.userId = u.id
+       WHERE se.occurredAt >= ?
+       GROUP BY u.role`,
+      sinceIso,
+    ) as any[];
 
     return events;
   }

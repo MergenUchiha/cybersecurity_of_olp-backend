@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { SecurityEventType } from '@prisma/client';
+import { SecurityEventType } from '../../common/constants';
 
 export interface SecurityEventData {
   eventType: SecurityEventType;
@@ -24,7 +24,7 @@ export class SecurityEventsService {
           userId: data.userId || null,
           ipAddress: data.ipAddress || null,
           userAgent: data.userAgent || null,
-          details: data.details ?? undefined,
+          details: data.details ? JSON.stringify(data.details) : undefined,
         },
       });
       this.logger.log(

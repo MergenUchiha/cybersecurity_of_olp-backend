@@ -13,7 +13,12 @@ export class AuditLogsService {
     details?: Record<string, any>;
     ipAddress?: string;
   }) {
-    return this.prisma.auditLog.create({ data: data as any });
+    return this.prisma.auditLog.create({
+      data: {
+        ...data,
+        details: data.details ? JSON.stringify(data.details) : undefined,
+      } as any,
+    });
   }
 
   async findAll(params: { page?: number; limit?: number; action?: string; userId?: string; startDate?: Date; endDate?: Date }) {

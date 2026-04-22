@@ -10,7 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { SecurityEventsService } from '../security-events/security-events.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/constants';
 
 @Injectable()
 export class AuthService {
@@ -409,7 +409,7 @@ export class AuthService {
     return user;
   }
 
-  private async generateTokens(userId: string, email: string, role: Role) {
+  private async generateTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
 
     const [accessToken, refreshToken] = await Promise.all([

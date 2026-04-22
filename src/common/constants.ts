@@ -1,0 +1,45 @@
+// String constants replacing Prisma enums for SQLite compatibility
+
+export const Role = {
+  STUDENT: 'STUDENT',
+  TEACHER: 'TEACHER',
+  ADMIN: 'ADMIN',
+} as const;
+export type Role = (typeof Role)[keyof typeof Role];
+
+export const SecurityEventType = {
+  LOGIN_SUCCESS: 'LOGIN_SUCCESS',
+  LOGIN_FAILURE: 'LOGIN_FAILURE',
+  LOGOUT: 'LOGOUT',
+  REFRESH_TOKEN: 'REFRESH_TOKEN',
+  PASSWORD_RESET_REQUEST: 'PASSWORD_RESET_REQUEST',
+  PASSWORD_RESET_COMPLETE: 'PASSWORD_RESET_COMPLETE',
+  PASSWORD_CHANGE: 'PASSWORD_CHANGE',
+  EMAIL_VERIFICATION: 'EMAIL_VERIFICATION',
+  ACCOUNT_BLOCKED: 'ACCOUNT_BLOCKED',
+  ACCOUNT_UNBLOCKED: 'ACCOUNT_UNBLOCKED',
+  ROLE_CHANGE: 'ROLE_CHANGE',
+  RATE_LIMIT_TRIGGERED: 'RATE_LIMIT_TRIGGERED',
+  SUSPICIOUS_REQUEST: 'SUSPICIOUS_REQUEST',
+  ACCESS_DENIED: 'ACCESS_DENIED',
+  BRUTE_FORCE_DETECTED: 'BRUTE_FORCE_DETECTED',
+  SESSION_REVOKED: 'SESSION_REVOKED',
+} as const;
+export type SecurityEventType = (typeof SecurityEventType)[keyof typeof SecurityEventType];
+
+export const AuditAction = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  PUBLISH: 'PUBLISH',
+  UNPUBLISH: 'UNPUBLISH',
+  ENROLL: 'ENROLL',
+  UNENROLL: 'UNENROLL',
+  SUBMIT: 'SUBMIT',
+  BLOCK: 'BLOCK',
+  UNBLOCK: 'UNBLOCK',
+  ROLE_CHANGE: 'ROLE_CHANGE',
+  LOGIN: 'LOGIN',
+  LOGOUT: 'LOGOUT',
+} as const;
+export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
