@@ -17,6 +17,7 @@ import { SecurityEventsModule } from './modules/security-events/security-events.
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { VideoCallsModule } from './modules/video-calls/video-calls.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     SessionsModule,
     AuditLogsModule,
     AnalyticsModule,
+    VideoCallsModule,
   ],
   providers: [
     {
