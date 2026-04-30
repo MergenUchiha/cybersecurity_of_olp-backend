@@ -15,6 +15,7 @@ async function bootstrap() {
     origin: [
       process.env.FRONTEND_URL || 'http://localhost:5002',
       'http://localhost:5173',
+      'http://TURN_SERVER_HOST:5002',
       'http://localhost:5002',
     ],
     credentials: true,

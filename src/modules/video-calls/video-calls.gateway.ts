@@ -45,12 +45,9 @@ interface Room {
   cors: {
     origin: [
       'http://localhost:5173',
-      'https://localhost:5173',
       'http://localhost:5002',
-      'http://172.20.10.3:5173',
-      'https://172.20.10.3:5173',
       'http://TURN_SERVER_HOST:5002',
-      'http://TURN_SERVER_HOST:5173',
+      'http://172.20.10.3:5173',
     ],
     credentials: true,
   },
