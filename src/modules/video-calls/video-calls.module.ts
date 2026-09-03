@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { VideoCallsGateway } from './video-calls.gateway';
+import { loadEnv } from '../../config/env.validation';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-production',
-      signOptions: { expiresIn: (process.env.JWT_ACCESS_EXPIRATION || '15m') as any },
+      // Third copy of the same fallback secret before this change. There is
+      // no default now: the value is required and validated at startup.
+      secret: loadEnv().JWT_SECRET,
+      signOptions: { expiresIn: loadEnv().JWT_ACCESS_EXPIRATION },
     }),
   ],
   providers: [VideoCallsGateway],

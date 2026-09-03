@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../database/prisma.service';
+import { loadEnv } from '../../../config/env.validation';
+import type { TokenPayload } from '../auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -9,11 +11,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-production',
+      // No fallback: the secret is validated at startup.
+      secretOrKey: loadEnv().JWT_SECRET,
     });
   }
 
-  async validate(payload: { sub: string; email: string; role: string; sid?: string }) {
+  async validate(payload: TokenPayload) {
+    // Both tokens are signed with the same secret, so the claim is what keeps
+    // a seven-day refresh token from being used as an access token.
+    if (payload.type !== 'access') {
+      throw new UnauthorizedException('Not an access token');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {

@@ -5,13 +5,16 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SecurityEventsModule } from '../security-events/security-events.module';
+import { loadEnv } from '../../config/env.validation';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-production',
-      signOptions: { expiresIn: (process.env.JWT_ACCESS_EXPIRATION || '15m') as any },
+      // No fallback on purpose: a default secret in a public repository lets
+      // anyone sign their own admin token. Validated at startup.
+      secret: loadEnv().JWT_SECRET,
+      signOptions: { expiresIn: loadEnv().JWT_ACCESS_EXPIRATION },
     }),
     SecurityEventsModule,
   ],

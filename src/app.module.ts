@@ -19,13 +19,18 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { VideoCallsModule } from './modules/video-calls/video-calls.module';
 
+// Config
+import { loadEnv } from './config/env.validation';
+
 @Module({
   imports: [
     // Rate limiting
-    ThrottlerModule.forRoot([{
-      ttl: parseInt(process.env.THROTTLE_TTL || '60000'),
-      limit: parseInt(process.env.THROTTLE_LIMIT || '100'),
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: loadEnv().THROTTLE_TTL,
+        limit: loadEnv().THROTTLE_LIMIT,
+      },
+    ]),
 
     // Scheduled tasks
     ScheduleModule.forRoot(),
