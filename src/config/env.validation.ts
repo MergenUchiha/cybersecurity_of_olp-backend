@@ -1,3 +1,11 @@
+import { config as loadDotenv } from 'dotenv';
+
+// Nothing in this project read the .env file: the application takes values
+// straight from process.env, and no loader ran before it. Every setting
+// therefore fell back to its default, and .env.example described a
+// configuration that was never applied.
+loadDotenv();
+
 /**
  * Validates the environment before the application starts. A missing or
  * malformed value fails here, loudly, instead of somewhere deep inside a
