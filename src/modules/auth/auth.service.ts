@@ -11,6 +11,18 @@ import { SecurityEventsService } from '../security-events/security-events.servic
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { Role } from '../../common/constants';
+import { loadEnv } from '../../config/env.validation';
+
+/** Matches the seven days the refresh token is signed for. */
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface TokenPayload {
+  sub: string;
+  email: string;
+  role: string;
+  sid?: string;
+  type?: 'access' | 'refresh';
+}
 
 @Injectable()
 export class AuthService {
@@ -81,7 +93,10 @@ export class AuthService {
         eventType: 'BRUTE_FORCE_DETECTED',
         ipAddress,
         userAgent,
-        details: { reason: 'Too many failed logins from this IP', count: ipFailedLogins },
+        details: {
+          reason: 'Too many failed logins from this IP',
+          count: ipFailedLogins,
+        },
       });
       throw new ForbiddenException(
         'Too many failed login attempts. Please try again later.',
@@ -103,14 +118,18 @@ export class AuthService {
     }
 
     // Check for user-specific brute force
-    const userFailedLogins = await this.securityEventsService.getUserFailedLogins(user.id, 15);
+    const userFailedLogins =
+      await this.securityEventsService.getUserFailedLogins(user.id, 15);
     if (userFailedLogins >= 5) {
       await this.securityEventsService.log({
         eventType: 'BRUTE_FORCE_DETECTED',
         userId: user.id,
         ipAddress,
         userAgent,
-        details: { reason: 'Too many failed logins for this user', count: userFailedLogins },
+        details: {
+          reason: 'Too many failed logins for this user',
+          count: userFailedLogins,
+        },
       });
       throw new ForbiddenException(
         'Account temporarily locked due to too many failed login attempts.',
@@ -125,7 +144,9 @@ export class AuthService {
         userAgent,
         details: { reason: 'Account is blocked' },
       });
-      throw new ForbiddenException('Account is blocked. Contact administrator.');
+      throw new ForbiddenException(
+        'Account is blocked. Contact administrator.',
+      );
     }
 
     if (!user.isActive) {
@@ -144,25 +165,27 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Store session with hashed refresh token
-    const hashedRefreshToken = await bcrypt.hash('placeholder', 10);
-    const session = await this.prisma.session.create({
+    // The session id is generated here so the token can carry it and the row
+    // can be written once. It used to be inserted with a hash of the literal
+    // string 'placeholder' and then updated, costing two bcrypt hashes and
+    // two queries per login.
+    const sessionId = uuidv4();
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      sessionId,
+    );
+
+    await this.prisma.session.create({
       data: {
+        id: sessionId,
         userId: user.id,
-        refreshToken: hashedRefreshToken,
+        refreshToken: await bcrypt.hash(tokens.refreshToken, 10),
         ipAddress,
         userAgent,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       },
-    });
-
-    const tokens = await this.generateTokens(user.id, user.email, user.role, session.id);
-
-    // Update session with real hashed refresh token
-    const realHashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { refreshToken: realHashedRefreshToken },
     });
 
     await this.securityEventsService.log({
@@ -186,57 +209,77 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshToken: string, ipAddress?: string, userAgent?: string) {
-    // Find all active sessions and check against hashed tokens
-    const sessions = await this.prisma.session.findMany({
-      where: { isRevoked: false, expiresAt: { gt: new Date() } },
-      include: { user: true },
-    });
-
-    let matchedSession: any = null;
-    for (const session of sessions) {
-      const isMatch = await bcrypt.compare(refreshToken, session.refreshToken);
-      if (isMatch) {
-        matchedSession = session;
-        break;
-      }
-    }
-
-    if (!matchedSession) {
+  async refreshToken(
+    refreshToken: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const reject = async (reason: string): Promise<never> => {
       await this.securityEventsService.log({
         eventType: 'SUSPICIOUS_REQUEST',
         ipAddress,
         userAgent,
-        details: { reason: 'Invalid refresh token' },
+        details: { reason },
       });
       throw new UnauthorizedException('Invalid refresh token');
+    };
+
+    // The token names its own session, so the row is fetched directly. This
+    // used to load every active session and run bcrypt.compare against each
+    // one: with a thousand sessions a single unauthenticated request burned
+    // roughly a minute of CPU.
+    let payload: TokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<TokenPayload>(refreshToken);
+    } catch {
+      return reject('Refresh token failed verification');
     }
 
-    // Revoke old session
+    if (payload.type !== 'refresh' || !payload.sid) {
+      return reject('Token is not a refresh token');
+    }
+
+    const matchedSession = await this.prisma.session.findUnique({
+      where: { id: payload.sid },
+      include: { user: true },
+    });
+
+    if (
+      !matchedSession ||
+      matchedSession.isRevoked ||
+      matchedSession.expiresAt <= new Date()
+    ) {
+      return reject('Session is revoked or expired');
+    }
+
+    if (!(await bcrypt.compare(refreshToken, matchedSession.refreshToken))) {
+      return reject('Refresh token does not match the stored session');
+    }
+
+    // Rotate: the old session is revoked and a new one takes its place.
     await this.prisma.session.update({
       where: { id: matchedSession.id },
       data: { isRevoked: true },
     });
 
     const user = matchedSession.user;
+    const newSessionId = uuidv4();
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      newSessionId,
+    );
 
-    // Create new session
-    const newSession = await this.prisma.session.create({
+    await this.prisma.session.create({
       data: {
+        id: newSessionId,
         userId: user.id,
-        refreshToken: await bcrypt.hash('placeholder', 10),
+        refreshToken: await bcrypt.hash(tokens.refreshToken, 10),
         ipAddress,
         userAgent,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       },
-    });
-
-    const tokens = await this.generateTokens(user.id, user.email, user.role, newSession.id);
-
-    // Update with real hashed refresh token
-    await this.prisma.session.update({
-      where: { id: newSession.id },
-      data: { refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
     });
 
     await this.securityEventsService.log({
@@ -252,21 +295,26 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string, refreshToken: string, ipAddress?: string, userAgent?: string) {
-    // Find and revoke the session
-    const sessions = await this.prisma.session.findMany({
-      where: { userId, isRevoked: false },
-    });
-
-    for (const session of sessions) {
-      const isMatch = await bcrypt.compare(refreshToken, session.refreshToken);
-      if (isMatch) {
-        await this.prisma.session.update({
-          where: { id: session.id },
+  async logout(
+    userId: string,
+    refreshToken: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    // Same as refresh: the session id travels in the token, so there is no
+    // need to bcrypt-compare against every session the user has open.
+    try {
+      const payload =
+        await this.jwtService.verifyAsync<TokenPayload>(refreshToken);
+      if (payload.sid && payload.sub === userId) {
+        await this.prisma.session.updateMany({
+          where: { id: payload.sid, userId, isRevoked: false },
           data: { isRevoked: true },
         });
-        break;
       }
+    } catch {
+      // A logout with an unusable token still clears the client side; there
+      // is nothing to revoke on ours.
     }
 
     await this.securityEventsService.log({
@@ -290,7 +338,8 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('User not found');
 
     const isValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isValid) throw new BadRequestException('Current password is incorrect');
+    if (!isValid)
+      throw new BadRequestException('Current password is incorrect');
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({
@@ -376,11 +425,16 @@ export class AuthService {
   }
 
   async verifyEmail(token: string) {
-    const verificationToken = await this.prisma.emailVerificationToken.findUnique({
-      where: { token },
-    });
+    const verificationToken =
+      await this.prisma.emailVerificationToken.findUnique({
+        where: { token },
+      });
 
-    if (!verificationToken || verificationToken.used || verificationToken.expiresAt < new Date()) {
+    if (
+      !verificationToken ||
+      verificationToken.used ||
+      verificationToken.expiresAt < new Date()
+    ) {
       throw new BadRequestException('Invalid or expired verification token');
     }
 
@@ -422,16 +476,31 @@ export class AuthService {
     return user;
   }
 
-  private async generateTokens(userId: string, email: string, role: string, sessionId?: string) {
-    const payload = { sub: userId, email, role, sid: sessionId };
+  /**
+   * The two tokens differ by more than their lifetime. They used to carry an
+   * identical payload signed with the same secret, so a refresh token was
+   * accepted anywhere an access token was - turning a fifteen-minute
+   * credential into a seven-day one. The `type` claim is checked by
+   * JwtStrategy and by refreshToken().
+   */
+  private async generateTokens(
+    userId: string,
+    email: string,
+    role: string,
+    sessionId?: string,
+  ) {
+    const base = { sub: userId, email, role, sid: sessionId };
+    const env = loadEnv();
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: (process.env.JWT_ACCESS_EXPIRATION || '15m') as any,
-      }),
-      this.jwtService.signAsync(payload, {
-        expiresIn: (process.env.JWT_REFRESH_EXPIRATION || '7d') as any,
-      }),
+      this.jwtService.signAsync(
+        { ...base, type: 'access' },
+        { expiresIn: env.JWT_ACCESS_EXPIRATION },
+      ),
+      this.jwtService.signAsync(
+        { ...base, type: 'refresh' },
+        { expiresIn: env.JWT_REFRESH_EXPIRATION },
+      ),
     ]);
 
     return { accessToken, refreshToken };
