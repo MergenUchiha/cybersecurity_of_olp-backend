@@ -148,7 +148,8 @@ the token.
 
 ## Known limitations
 
-- There are no automated tests.
+- There are no automated tests. Every endpoint was exercised by hand against
+  a running instance.
 - The schema stores enums as plain strings, because SQLite has none. Moving to
   PostgreSQL would let the database enforce them.
 - Email is not sent anywhere: verification and password-reset tokens are
