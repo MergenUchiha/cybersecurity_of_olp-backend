@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
+import { loadEnv } from '../../config/env.validation';
 
 interface AuthenticatedUser {
   id: string;
@@ -29,6 +30,18 @@ interface RoomParticipant {
   isCameraOff: boolean;
 }
 
+/** What `get-rooms` reports back about a room the caller may enter. */
+interface RoomSummary {
+  id: string;
+  name: string;
+  participantCount: number;
+  isGroupCall: boolean;
+  createdBy: string;
+  createdByName: string;
+  allowedCount: number;
+  createdAt: Date;
+}
+
 interface Room {
   id: string;
   name: string;
@@ -41,19 +54,21 @@ interface Room {
   createdAt: Date;
 }
 
+// Origins come from CORS_ORIGINS, the same list the HTTP side uses. They were
+// a hardcoded array that named a production IP address.
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5002',
-      'http://TURN_SERVER_HOST:5002',
-      'http://172.20.10.3:5173',
-    ],
+    origin: loadEnv()
+      .CORS_ORIGINS.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     credentials: true,
   },
   path: '/video-socket',
 })
-export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class VideoCallsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -69,9 +84,14 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
 
   async handleConnection(client: Socket) {
     try {
+      const auth = client.handshake.auth as { token?: unknown } | undefined;
+      const header = client.handshake.headers?.authorization;
       const token =
-        client.handshake.auth?.token ||
-        client.handshake.headers?.authorization?.replace('Bearer ', '');
+        typeof auth?.token === 'string'
+          ? auth.token
+          : typeof header === 'string'
+            ? header.replace('Bearer ', '')
+            : undefined;
 
       if (!token) {
         this.logger.warn(`Connection rejected (no token): ${client.id}`);
@@ -80,16 +100,32 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
         return;
       }
 
-      const payload = this.jwtService.verify<{ sub: string; email: string; role: string }>(token);
+      const payload = this.jwtService.verify<{
+        sub: string;
+        email: string;
+        role: string;
+      }>(token);
 
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true, isBlocked: true },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          isBlocked: true,
+        },
       });
 
       if (!user || !user.isActive || user.isBlocked) {
-        this.logger.warn(`Connection rejected (user inactive/blocked): ${client.id}, userId=${payload.sub}`);
-        client.emit('error', { message: 'Account is not active or has been blocked' });
+        this.logger.warn(
+          `Connection rejected (user inactive/blocked): ${client.id}, userId=${payload.sub}`,
+        );
+        client.emit('error', {
+          message: 'Account is not active or has been blocked',
+        });
         client.disconnect(true);
         return;
       }
@@ -109,8 +145,11 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
         userId: user.id,
         userName: `${user.firstName} ${user.lastName}`,
       });
-    } catch (err) {
-      this.logger.warn(`Connection rejected (invalid token): ${client.id} — ${err.message}`);
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Connection rejected (invalid token): ${client.id} — ${reason}`,
+      );
       client.emit('error', { message: 'Invalid or expired token' });
       client.disconnect(true);
     }
@@ -118,7 +157,9 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
 
   handleDisconnect(client: Socket) {
     const user = this.socketToUser.get(client.id);
-    this.logger.log(`Client disconnected: ${client.id} (${user?.email || 'unknown'})`);
+    this.logger.log(
+      `Client disconnected: ${client.id} (${user?.email || 'unknown'})`,
+    );
 
     const roomId = this.socketToRoom.get(client.id);
     if (roomId) {
@@ -170,7 +211,13 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
           { email: { contains: query } },
         ],
       },
-      select: { id: true, firstName: true, lastName: true, email: true, role: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+      },
       take: 20,
     });
 
@@ -181,7 +228,8 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
   @SubscribeMessage('create-room')
   handleCreateRoom(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomName: string; isGroupCall: boolean; allowedUserIds?: string[] },
+    @MessageBody()
+    data: { roomName: string; isGroupCall: boolean; allowedUserIds?: string[] },
   ) {
     const user = this.getUser(client);
     if (!user) return;
@@ -201,7 +249,9 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
     };
     this.rooms.set(roomId, room);
 
-    this.logger.log(`Room created: ${roomId} by ${user.email}, allowed: [${[...allowedSet].join(',')}]`);
+    this.logger.log(
+      `Room created: ${roomId} by ${user.email}, allowed: [${[...allowedSet].join(',')}]`,
+    );
     client.emit('room-created', { roomId, roomName: data.roomName });
   }
 
@@ -222,8 +272,12 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
 
     // *** ACCESS CONTROL — reject and disconnect unauthorized users ***
     if (!this.isUserAllowed(room, user.id)) {
-      this.logger.warn(`Access denied: ${user.email} tried to join room ${data.roomId}`);
-      client.emit('error', { message: 'Access denied — you are not invited to this room' });
+      this.logger.warn(
+        `Access denied: ${user.email} tried to join room ${data.roomId}`,
+      );
+      client.emit('error', {
+        message: 'Access denied — you are not invited to this room',
+      });
       client.disconnect(true);
       return;
     }
@@ -259,7 +313,7 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
 
     room.participants.set(client.id, participant);
     this.socketToRoom.set(client.id, data.roomId);
-    client.join(data.roomId);
+    void client.join(data.roomId);
 
     this.logger.log(`${user.email} joined room ${data.roomId}`);
 
@@ -268,7 +322,10 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
   }
 
   /** Verify that both sender and target are in the same room */
-  private areInSameRoom(senderSocketId: string, targetSocketId: string): boolean {
+  private areInSameRoom(
+    senderSocketId: string,
+    targetSocketId: string,
+  ): boolean {
     const senderRoom = this.socketToRoom.get(senderSocketId);
     const targetRoom = this.socketToRoom.get(targetSocketId);
     return !!senderRoom && senderRoom === targetRoom;
@@ -278,31 +335,41 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
   @SubscribeMessage('offer')
   handleOffer(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { targetSocketId: string; sdp: RTCSessionDescriptionInit },
+    @MessageBody()
+    data: { targetSocketId: string; sdp: RTCSessionDescriptionInit },
   ) {
     if (!this.getUser(client)) return;
     if (!this.areInSameRoom(client.id, data.targetSocketId)) return;
-    this.server.to(data.targetSocketId).emit('offer', { sdp: data.sdp, fromSocketId: client.id });
+    this.server
+      .to(data.targetSocketId)
+      .emit('offer', { sdp: data.sdp, fromSocketId: client.id });
   }
 
   @SubscribeMessage('answer')
   handleAnswer(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { targetSocketId: string; sdp: RTCSessionDescriptionInit },
+    @MessageBody()
+    data: { targetSocketId: string; sdp: RTCSessionDescriptionInit },
   ) {
     if (!this.getUser(client)) return;
     if (!this.areInSameRoom(client.id, data.targetSocketId)) return;
-    this.server.to(data.targetSocketId).emit('answer', { sdp: data.sdp, fromSocketId: client.id });
+    this.server
+      .to(data.targetSocketId)
+      .emit('answer', { sdp: data.sdp, fromSocketId: client.id });
   }
 
   @SubscribeMessage('ice-candidate')
   handleIceCandidate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { targetSocketId: string; candidate: RTCIceCandidateInit },
+    @MessageBody()
+    data: { targetSocketId: string; candidate: RTCIceCandidateInit },
   ) {
     if (!this.getUser(client)) return;
     if (!this.areInSameRoom(client.id, data.targetSocketId)) return;
-    this.server.to(data.targetSocketId).emit('ice-candidate', { candidate: data.candidate, fromSocketId: client.id });
+    this.server.to(data.targetSocketId).emit('ice-candidate', {
+      candidate: data.candidate,
+      fromSocketId: client.id,
+    });
   }
 
   // ─── Media toggles ──────────────────────────────────────
@@ -317,7 +384,10 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
       const participant = room.participants.get(client.id);
       if (participant) {
         participant.isMuted = data.isMuted;
-        client.to(data.roomId).emit('user-toggle-mute', { socketId: client.id, isMuted: data.isMuted });
+        client.to(data.roomId).emit('user-toggle-mute', {
+          socketId: client.id,
+          isMuted: data.isMuted,
+        });
       }
     }
   }
@@ -333,7 +403,10 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
       const participant = room.participants.get(client.id);
       if (participant) {
         participant.isCameraOff = data.isCameraOff;
-        client.to(data.roomId).emit('user-toggle-camera', { socketId: client.id, isCameraOff: data.isCameraOff });
+        client.to(data.roomId).emit('user-toggle-camera', {
+          socketId: client.id,
+          isCameraOff: data.isCameraOff,
+        });
       }
     }
   }
@@ -354,7 +427,7 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
     const user = this.getUser(client);
     if (!user) return;
 
-    const roomList: any[] = [];
+    const roomList: RoomSummary[] = [];
     for (const room of this.rooms.values()) {
       if (this.isUserAllowed(room, user.id)) {
         roomList.push({
@@ -379,7 +452,7 @@ export class VideoCallsGateway implements OnGatewayConnection, OnGatewayDisconne
     const participant = room.participants.get(client.id);
     room.participants.delete(client.id);
     this.socketToRoom.delete(client.id);
-    client.leave(roomId);
+    void client.leave(roomId);
 
     if (participant) {
       client.to(roomId).emit('user-left', {
