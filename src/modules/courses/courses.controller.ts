@@ -1,5 +1,13 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CoursesService } from './courses.service';
@@ -17,7 +25,8 @@ export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
   @Post()
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async create(
     @CurrentUser('sub') userId: string,
     @Body() dto: { title: string; description?: string; category?: string },
@@ -26,20 +35,28 @@ export class CoursesController {
   }
 
   @Get()
-  @ApiQuery({ name: 'page', required: false }) @ApiQuery({ name: 'limit', required: false })
-  @ApiQuery({ name: 'search', required: false }) @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'category', required: false })
   async findAll(
-    @Query('page') page?: string, @Query('limit') limit?: string,
-    @Query('search') search?: string, @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
   ) {
     return this.coursesService.findAll({
-      page: page ? +page : 1, limit: limit ? +limit : 20,
-      search, category, publishedOnly: true,
+      page: page ? +page : 1,
+      limit: limit ? +limit : 20,
+      search,
+      category,
+      publishedOnly: true,
     });
   }
 
   @Get('my-courses')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async findMyCourses(@CurrentUser('sub') userId: string) {
     return this.coursesService.findByTeacher(userId);
   }
@@ -50,7 +67,8 @@ export class CoursesController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async update(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
@@ -61,7 +79,8 @@ export class CoursesController {
   }
 
   @Patch(':id/toggle-publish')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async togglePublish(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
@@ -71,7 +90,8 @@ export class CoursesController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async delete(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,

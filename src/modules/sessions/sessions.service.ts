@@ -8,7 +8,13 @@ export class SessionsService {
   async findByUser(userId: string) {
     return this.prisma.session.findMany({
       where: { userId, isRevoked: false, expiresAt: { gt: new Date() } },
-      select: { id: true, ipAddress: true, userAgent: true, createdAt: true, expiresAt: true },
+      select: {
+        id: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+        expiresAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -20,7 +26,17 @@ export class SessionsService {
     const [data, total] = await Promise.all([
       this.prisma.session.findMany({
         where,
-        include: { user: { select: { id: true, email: true, firstName: true, lastName: true, role: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -28,7 +44,10 @@ export class SessionsService {
       this.prisma.session.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async revokeSession(sessionId: string) {

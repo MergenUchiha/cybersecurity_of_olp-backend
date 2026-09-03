@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { Role } from '../../common/constants';
 
@@ -6,15 +11,24 @@ import { Role } from '../../common/constants';
 export class CoursesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(teacherId: string, data: { title: string; description?: string; category?: string }) {
+  async create(
+    teacherId: string,
+    data: { title: string; description?: string; category?: string },
+  ) {
     return this.prisma.course.create({
       data: { ...data, teacherId },
     });
   }
 
-  async findAll(params: { page?: number; limit?: number; search?: string; category?: string; publishedOnly?: boolean }) {
+  async findAll(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    category?: string;
+    publishedOnly?: boolean;
+  }) {
     const { page = 1, limit = 20, search, category, publishedOnly } = params;
-    const where: any = {};
+    const where: Prisma.CourseWhereInput = {};
     if (publishedOnly) where.isPublished = true;
     if (category) where.category = category;
     if (search) {
@@ -38,7 +52,10 @@ export class CoursesService {
       this.prisma.course.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findByTeacher(teacherId: string) {
@@ -53,8 +70,13 @@ export class CoursesService {
     const course = await this.prisma.course.findUnique({
       where: { id },
       include: {
-        teacher: { select: { id: true, firstName: true, lastName: true, email: true } },
-        lessons: { orderBy: { order: 'asc' }, include: { _count: { select: { materials: true, quizzes: true } } } },
+        teacher: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        lessons: {
+          orderBy: { order: 'asc' },
+          include: { _count: { select: { materials: true, quizzes: true } } },
+        },
         _count: { select: { enrollments: true } },
       },
     });
@@ -62,7 +84,17 @@ export class CoursesService {
     return course;
   }
 
-  async update(id: string, userId: string, userRole: Role, data: { title?: string; description?: string; category?: string; thumbnail?: string }) {
+  async update(
+    id: string,
+    userId: string,
+    userRole: Role,
+    data: {
+      title?: string;
+      description?: string;
+      category?: string;
+      thumbnail?: string;
+    },
+  ) {
     const course = await this.prisma.course.findUnique({ where: { id } });
     if (!course) throw new NotFoundException('Course not found');
     if (course.teacherId !== userId && userRole !== Role.ADMIN) {

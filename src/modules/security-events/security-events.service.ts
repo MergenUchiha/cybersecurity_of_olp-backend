@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { SecurityEventType } from '../../common/constants';
+import { Prisma } from '@prisma/client';
 
 export interface SecurityEventData {
   eventType: SecurityEventType;
@@ -54,7 +55,7 @@ export class SecurityEventsService {
       endDate,
     } = params;
 
-    const where: any = {};
+    const where: Prisma.SecurityEventWhereInput = {};
     if (eventType) where.eventType = eventType;
     if (userId) where.userId = userId;
     if (ipAddress) where.ipAddress = { contains: ipAddress };
@@ -67,7 +68,11 @@ export class SecurityEventsService {
     const [data, total] = await Promise.all([
       this.prisma.securityEvent.findMany({
         where,
-        include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        include: {
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+        },
         orderBy: { occurredAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -88,7 +93,11 @@ export class SecurityEventsService {
 
   async getRecentEvents(limit = 10) {
     return this.prisma.securityEvent.findMany({
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+      include: {
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true },
+        },
+      },
       orderBy: { occurredAt: 'desc' },
       take: limit,
     });

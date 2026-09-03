@@ -1,4 +1,11 @@
-import { Controller, Post, Delete, Get, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Delete,
+  Get,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { EnrollmentsService } from './enrollments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -36,7 +43,8 @@ export class EnrollmentsController {
   }
 
   @Get('course/:courseId')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async getCourseEnrollments(@Param('courseId') courseId: string) {
     return this.enrollmentsService.getCourseEnrollments(courseId);
   }
@@ -46,7 +54,10 @@ export class EnrollmentsController {
     @CurrentUser('sub') studentId: string,
     @Param('courseId') courseId: string,
   ) {
-    const enrolled = await this.enrollmentsService.isEnrolled(studentId, courseId);
+    const enrolled = await this.enrollmentsService.isEnrolled(
+      studentId,
+      courseId,
+    );
     return { enrolled };
   }
 }

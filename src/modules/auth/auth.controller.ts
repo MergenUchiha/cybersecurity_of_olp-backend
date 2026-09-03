@@ -33,7 +33,13 @@ export class AuthController {
     },
   })
   async register(
-    @Body() dto: { email: string; password: string; firstName: string; lastName: string },
+    @Body()
+    dto: {
+      email: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+    },
   ) {
     return this.authService.register(dto);
   }
@@ -55,7 +61,12 @@ export class AuthController {
     @Ip() ipAddress: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.login(dto.email, dto.password, ipAddress, userAgent);
+    return this.authService.login(
+      dto.email,
+      dto.password,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('refresh')
@@ -74,7 +85,11 @@ export class AuthController {
     @Ip() ipAddress: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.refreshToken(dto.refreshToken, ipAddress, userAgent);
+    return this.authService.refreshToken(
+      dto.refreshToken,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('logout')
@@ -87,7 +102,12 @@ export class AuthController {
     @Ip() ipAddress: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.logout(userId, dto.refreshToken, ipAddress, userAgent);
+    return this.authService.logout(
+      userId,
+      dto.refreshToken,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('change-password')
@@ -124,7 +144,11 @@ export class AuthController {
     @Body() dto: { token: string; newPassword: string },
     @Ip() ipAddress: string,
   ) {
-    return this.authService.resetPassword(dto.token, dto.newPassword, ipAddress);
+    return this.authService.resetPassword(
+      dto.token,
+      dto.newPassword,
+      ipAddress,
+    );
   }
 
   @Get('verify-email')

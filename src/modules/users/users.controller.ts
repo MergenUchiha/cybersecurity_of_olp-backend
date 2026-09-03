@@ -1,5 +1,11 @@
 import {
-  Controller, Get, Patch, Delete, Param, Body, Query,
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -20,14 +26,21 @@ export class UsersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @ApiQuery({ name: 'page', required: false }) @ApiQuery({ name: 'limit', required: false })
-  @ApiQuery({ name: 'role', required: false, enum: Role }) @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'role', required: false, enum: Role })
+  @ApiQuery({ name: 'search', required: false })
   async findAll(
-    @Query('page') page?: string, @Query('limit') limit?: string,
-    @Query('role') role?: Role, @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('role') role?: Role,
+    @Query('search') search?: string,
   ) {
     return this.usersService.findAll({
-      page: page ? +page : 1, limit: limit ? +limit : 20, role, search,
+      page: page ? +page : 1,
+      limit: limit ? +limit : 20,
+      role,
+      search,
     });
   }
 
@@ -52,31 +65,39 @@ export class UsersController {
   }
 
   @Patch(':id/block')
-  @UseGuards(RolesGuard) @Roles(Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
   async blockUser(@Param('id') id: string) {
     return this.usersService.blockUser(id);
   }
 
   @Patch(':id/unblock')
-  @UseGuards(RolesGuard) @Roles(Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
   async unblockUser(@Param('id') id: string) {
     return this.usersService.unblockUser(id);
   }
 
   @Patch(':id/role')
-  @UseGuards(RolesGuard) @Roles(Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
   async changeRole(@Param('id') id: string, @Body() dto: { role: Role }) {
     return this.usersService.changeRole(id, dto.role);
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(RolesGuard) @Roles(Role.ADMIN)
-  async toggleActive(@Param('id') id: string, @Body() dto: { isActive: boolean }) {
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async toggleActive(
+    @Param('id') id: string,
+    @Body() dto: { isActive: boolean },
+  ) {
     return this.usersService.toggleActive(id, dto.isActive);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard) @Roles(Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
   async delete(@Param('id') id: string) {
     return this.usersService.delete(id);
   }

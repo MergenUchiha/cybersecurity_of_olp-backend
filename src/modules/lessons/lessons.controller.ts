@@ -1,5 +1,12 @@
 import {
-  Controller, Get, Post, Patch, Delete, Param, Body, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { LessonsService } from './lessons.service';
@@ -17,12 +24,14 @@ export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
   @Post(':courseId')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async create(
     @Param('courseId') courseId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: Role,
-    @Body() dto: { title: string; content?: string; videoUrl?: string; order?: number },
+    @Body()
+    dto: { title: string; content?: string; videoUrl?: string; order?: number },
   ) {
     return this.lessonsService.create(userId, role, courseId, dto);
   }
@@ -38,18 +47,26 @@ export class LessonsController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async update(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: Role,
-    @Body() dto: { title?: string; content?: string; videoUrl?: string; order?: number },
+    @Body()
+    dto: {
+      title?: string;
+      content?: string;
+      videoUrl?: string;
+      order?: number;
+    },
   ) {
     return this.lessonsService.update(id, userId, role, dto);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async delete(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
@@ -59,7 +76,8 @@ export class LessonsController {
   }
 
   @Patch('course/:courseId/reorder')
-  @UseGuards(RolesGuard) @Roles(Role.TEACHER, Role.ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   async reorder(
     @Param('courseId') courseId: string,
     @Body() dto: { lessonIds: string[] },

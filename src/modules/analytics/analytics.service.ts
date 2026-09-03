@@ -9,7 +9,6 @@ export class AnalyticsService {
     const now = new Date();
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const last30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [
       totalUsers,
@@ -25,20 +24,38 @@ export class AnalyticsService {
       this.prisma.user.count(),
       this.prisma.course.count(),
       this.prisma.enrollment.count(),
-      this.prisma.session.count({ where: { isRevoked: false, expiresAt: { gt: now } } }),
-      this.prisma.securityEvent.count({ where: { eventType: 'LOGIN_FAILURE', occurredAt: { gte: last24h } } }),
-      this.prisma.securityEvent.count({ where: { eventType: 'LOGIN_FAILURE', occurredAt: { gte: last7d } } }),
-      this.prisma.securityEvent.count({ where: { occurredAt: { gte: last24h } } }),
+      this.prisma.session.count({
+        where: { isRevoked: false, expiresAt: { gt: now } },
+      }),
+      this.prisma.securityEvent.count({
+        where: { eventType: 'LOGIN_FAILURE', occurredAt: { gte: last24h } },
+      }),
+      this.prisma.securityEvent.count({
+        where: { eventType: 'LOGIN_FAILURE', occurredAt: { gte: last7d } },
+      }),
+      this.prisma.securityEvent.count({
+        where: { occurredAt: { gte: last24h } },
+      }),
       this.prisma.user.count({ where: { isBlocked: true } }),
       this.prisma.securityEvent.findMany({
-        include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        include: {
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+        },
         orderBy: { occurredAt: 'desc' },
         take: 10,
       }),
     ]);
 
     return {
-      overview: { totalUsers, totalCourses, totalEnrollments, activeSessions, blockedUsers },
+      overview: {
+        totalUsers,
+        totalCourses,
+        totalEnrollments,
+        activeSessions,
+        blockedUsers,
+      },
       security: { failedLogins24h, failedLogins7d, totalSecurityEvents24h },
       recentSecurityEvents,
     };
@@ -78,7 +95,7 @@ export class AnalyticsService {
       _count: { id: true },
     });
 
-    return events.map(e => ({
+    return events.map((e) => ({
       eventType: e.eventType,
       count: e._count.id,
     }));
@@ -94,7 +111,7 @@ export class AnalyticsService {
        WHERE se.occurredAt >= ?
        GROUP BY u.role`,
       sinceIso,
-    ) as any[];
+    );
 
     return events;
   }
@@ -105,7 +122,7 @@ export class AnalyticsService {
       _count: { id: true },
     });
 
-    return users.map(u => ({
+    return users.map((u) => ({
       role: u.role,
       count: u._count.id,
     }));
@@ -118,10 +135,16 @@ export class AnalyticsService {
         where: { eventType: 'ACCOUNT_BLOCKED', occurredAt: { gte: since } },
       }),
       this.prisma.securityEvent.count({
-        where: { eventType: 'BRUTE_FORCE_DETECTED', occurredAt: { gte: since } },
+        where: {
+          eventType: 'BRUTE_FORCE_DETECTED',
+          occurredAt: { gte: since },
+        },
       }),
       this.prisma.securityEvent.count({
-        where: { eventType: 'RATE_LIMIT_TRIGGERED', occurredAt: { gte: since } },
+        where: {
+          eventType: 'RATE_LIMIT_TRIGGERED',
+          occurredAt: { gte: since },
+        },
       }),
     ]);
 

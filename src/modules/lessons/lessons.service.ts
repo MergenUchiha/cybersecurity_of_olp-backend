@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { Role } from '../../common/constants';
 
@@ -6,17 +10,36 @@ import { Role } from '../../common/constants';
 export class LessonsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, userRole: Role, courseId: string, data: { title: string; content?: string; videoUrl?: string; order?: number }) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async create(
+    userId: string,
+    userRole: Role,
+    courseId: string,
+    data: {
+      title: string;
+      content?: string;
+      videoUrl?: string;
+      order?: number;
+    },
+  ) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+    });
     if (!course) throw new NotFoundException('Course not found');
-    if (course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
 
     const maxOrder = await this.prisma.lesson.findFirst({
-      where: { courseId }, orderBy: { order: 'desc' }, select: { order: true },
+      where: { courseId },
+      orderBy: { order: 'desc' },
+      select: { order: true },
     });
 
     return this.prisma.lesson.create({
-      data: { ...data, courseId, order: data.order ?? (maxOrder ? maxOrder.order + 1 : 0) },
+      data: {
+        ...data,
+        courseId,
+        order: data.order ?? (maxOrder ? maxOrder.order + 1 : 0),
+      },
     });
   }
 
@@ -41,21 +64,35 @@ export class LessonsService {
     return lesson;
   }
 
-  async update(id: string, userId: string, userRole: Role, data: { title?: string; content?: string; videoUrl?: string; order?: number }) {
+  async update(
+    id: string,
+    userId: string,
+    userRole: Role,
+    data: {
+      title?: string;
+      content?: string;
+      videoUrl?: string;
+      order?: number;
+    },
+  ) {
     const lesson = await this.prisma.lesson.findUnique({
-      where: { id }, include: { course: true },
+      where: { id },
+      include: { course: true },
     });
     if (!lesson) throw new NotFoundException('Lesson not found');
-    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
     return this.prisma.lesson.update({ where: { id }, data });
   }
 
   async delete(id: string, userId: string, userRole: Role) {
     const lesson = await this.prisma.lesson.findUnique({
-      where: { id }, include: { course: true },
+      where: { id },
+      include: { course: true },
     });
     if (!lesson) throw new NotFoundException('Lesson not found');
-    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
     return this.prisma.lesson.delete({ where: { id } });
   }
 

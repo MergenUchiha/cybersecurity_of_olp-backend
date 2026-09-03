@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   Injectable,
   NotFoundException,
@@ -10,9 +11,14 @@ import { Role } from '../../common/constants';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(params: { page?: number; limit?: number; role?: Role; search?: string }) {
+  async findAll(params: {
+    page?: number;
+    limit?: number;
+    role?: Role;
+    search?: string;
+  }) {
     const { page = 1, limit = 20, role, search } = params;
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
     if (role) where.role = role;
     if (search) {
       where.OR = [
@@ -26,9 +32,16 @@ export class UsersService {
       this.prisma.user.findMany({
         where,
         select: {
-          id: true, email: true, firstName: true, lastName: true,
-          role: true, isActive: true, isBlocked: true, emailVerified: true,
-          avatarUrl: true, createdAt: true,
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          isBlocked: true,
+          emailVerified: true,
+          avatarUrl: true,
+          createdAt: true,
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -37,16 +50,27 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
-        id: true, email: true, firstName: true, lastName: true,
-        role: true, isActive: true, isBlocked: true, emailVerified: true,
-        avatarUrl: true, createdAt: true, updatedAt: true,
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        isBlocked: true,
+        emailVerified: true,
+        avatarUrl: true,
+        createdAt: true,
+        updatedAt: true,
         _count: { select: { enrollments: true, coursesAsTeacher: true } },
       },
     });
@@ -54,13 +78,20 @@ export class UsersService {
     return user;
   }
 
-  async updateProfile(userId: string, data: { firstName?: string; lastName?: string; avatarUrl?: string }) {
+  async updateProfile(
+    userId: string,
+    data: { firstName?: string; lastName?: string; avatarUrl?: string },
+  ) {
     return this.prisma.user.update({
       where: { id: userId },
       data,
       select: {
-        id: true, email: true, firstName: true, lastName: true,
-        role: true, avatarUrl: true,
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        avatarUrl: true,
       },
     });
   }
@@ -68,7 +99,8 @@ export class UsersService {
   async blockUser(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    if (user.role === Role.ADMIN) throw new BadRequestException('Cannot block an admin');
+    if (user.role === Role.ADMIN)
+      throw new BadRequestException('Cannot block an admin');
 
     return this.prisma.user.update({
       where: { id: userId },

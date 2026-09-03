@@ -25,7 +25,8 @@ export const SecurityEventType = {
   BRUTE_FORCE_DETECTED: 'BRUTE_FORCE_DETECTED',
   SESSION_REVOKED: 'SESSION_REVOKED',
 } as const;
-export type SecurityEventType = (typeof SecurityEventType)[keyof typeof SecurityEventType];
+export type SecurityEventType =
+  (typeof SecurityEventType)[keyof typeof SecurityEventType];
 
 export const AuditAction = {
   CREATE: 'CREATE',

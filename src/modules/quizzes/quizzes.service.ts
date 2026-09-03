@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { Role } from '../../common/constants';
 
@@ -6,10 +11,24 @@ import { Role } from '../../common/constants';
 export class QuizzesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, userRole: Role, lessonId: string, data: { title: string; description?: string; passingScore?: number; timeLimit?: number }) {
-    const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId }, include: { course: true } });
+  async create(
+    userId: string,
+    userRole: Role,
+    lessonId: string,
+    data: {
+      title: string;
+      description?: string;
+      passingScore?: number;
+      timeLimit?: number;
+    },
+  ) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { course: true },
+    });
     if (!lesson) throw new NotFoundException('Lesson not found');
-    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (lesson.course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
 
     return this.prisma.quiz.create({ data: { ...data, lessonId } });
   }
@@ -18,7 +37,10 @@ export class QuizzesService {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id },
       include: {
-        questions: { orderBy: { order: 'asc' }, include: { answerOptions: true } },
+        questions: {
+          orderBy: { order: 'asc' },
+          include: { answerOptions: true },
+        },
         lesson: { select: { id: true, title: true, courseId: true } },
         _count: { select: { attempts: true } },
       },
@@ -43,22 +65,47 @@ export class QuizzesService {
     return quiz;
   }
 
-  async update(id: string, userId: string, userRole: Role, data: { title?: string; description?: string; passingScore?: number; timeLimit?: number }) {
-    const quiz = await this.prisma.quiz.findUnique({ where: { id }, include: { lesson: { include: { course: true } } } });
+  async update(
+    id: string,
+    userId: string,
+    userRole: Role,
+    data: {
+      title?: string;
+      description?: string;
+      passingScore?: number;
+      timeLimit?: number;
+    },
+  ) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id },
+      include: { lesson: { include: { course: true } } },
+    });
     if (!quiz) throw new NotFoundException('Quiz not found');
-    if (quiz.lesson.course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (quiz.lesson.course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
     return this.prisma.quiz.update({ where: { id }, data });
   }
 
   async delete(id: string, userId: string, userRole: Role) {
-    const quiz = await this.prisma.quiz.findUnique({ where: { id }, include: { lesson: { include: { course: true } } } });
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id },
+      include: { lesson: { include: { course: true } } },
+    });
     if (!quiz) throw new NotFoundException('Quiz not found');
-    if (quiz.lesson.course.teacherId !== userId && userRole !== Role.ADMIN) throw new ForbiddenException('Not authorized');
+    if (quiz.lesson.course.teacherId !== userId && userRole !== Role.ADMIN)
+      throw new ForbiddenException('Not authorized');
     return this.prisma.quiz.delete({ where: { id } });
   }
 
   // Question management
-  async addQuestion(quizId: string, data: { text: string; order?: number; answerOptions: { text: string; isCorrect: boolean }[] }) {
+  async addQuestion(
+    quizId: string,
+    data: {
+      text: string;
+      order?: number;
+      answerOptions: { text: string; isCorrect: boolean }[];
+    },
+  ) {
     return this.prisma.question.create({
       data: {
         quizId,
@@ -70,7 +117,10 @@ export class QuizzesService {
     });
   }
 
-  async updateQuestion(questionId: string, data: { text?: string; order?: number }) {
+  async updateQuestion(
+    questionId: string,
+    data: { text?: string; order?: number },
+  ) {
     return this.prisma.question.update({ where: { id: questionId }, data });
   }
 
@@ -79,7 +129,11 @@ export class QuizzesService {
   }
 
   // Quiz attempt
-  async submitAttempt(quizId: string, studentId: string, answers: { questionId: string; selectedOptionId: string }[]) {
+  async submitAttempt(
+    quizId: string,
+    studentId: string,
+    answers: { questionId: string; selectedOptionId: string }[],
+  ) {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
       include: { questions: { include: { answerOptions: true } } },
@@ -91,13 +145,16 @@ export class QuizzesService {
     const totalQuestions = quiz.questions.length;
 
     for (const answer of answers) {
-      const question = quiz.questions.find(q => q.id === answer.questionId);
+      const question = quiz.questions.find((q) => q.id === answer.questionId);
       if (!question) continue;
-      const selectedOption = question.answerOptions.find(o => o.id === answer.selectedOptionId);
+      const selectedOption = question.answerOptions.find(
+        (o) => o.id === answer.selectedOptionId,
+      );
       if (selectedOption?.isCorrect) correctCount++;
     }
 
-    const score = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+    const score =
+      totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
     const passed = score >= quiz.passingScore;
 
     const attempt = await this.prisma.quizAttempt.create({
@@ -109,7 +166,7 @@ export class QuizzesService {
         passed,
         submittedAt: new Date(),
         answers: {
-          create: answers.map(a => ({
+          create: answers.map((a) => ({
             questionId: a.questionId,
             selectedOptionId: a.selectedOptionId,
           })),
@@ -125,14 +182,16 @@ export class QuizzesService {
     return this.prisma.quizAttempt.findMany({
       where: { quizId },
       include: {
-        student: { select: { id: true, firstName: true, lastName: true, email: true } },
+        student: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
       },
       orderBy: { submittedAt: 'desc' },
     });
   }
 
   async getStudentAttempts(studentId: string, quizId?: string) {
-    const where: any = { studentId };
+    const where: Prisma.QuizAttemptWhereInput = { studentId };
     if (quizId) where.quizId = quizId;
 
     return this.prisma.quizAttempt.findMany({
