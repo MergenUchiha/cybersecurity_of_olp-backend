@@ -1,98 +1,158 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Secure LMS — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+An online learning platform for cybersecurity training, built so that the
+security of the platform itself is part of the product: every sign-in,
+role change and privileged action is recorded, sessions can be revoked
+individually, and an admin dashboard reports on what the logs contain.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Courses, lessons and quizzes sit on top of that, along with peer-to-peer
+video calls over WebRTC for live sessions.
 
-## Description
+The interface lives in
+[cybersecurity_of_olp-frontend](https://github.com/MergenUchiha/cybersecurity_of_olp-frontend).
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Stack
 
-## Project setup
+| Area | Choice |
+|---|---|
+| Runtime | Node.js 20+, TypeScript 5 |
+| Framework | NestJS 11 on Express |
+| Database | SQLite through Prisma 6 |
+| Auth | JWT access/refresh with passport-jwt, bcrypt, three roles |
+| Realtime | socket.io — WebRTC signalling for video calls |
+| Rate limiting | `@nestjs/throttler` |
+| Docs | Swagger at `/api/docs`, behind a flag |
 
-```bash
-$ npm install
-```
+Dependencies are installed with [bun](https://bun.sh); every script runs under
+npm.
 
-## Compile and run the project
+## What is in it
 
-```bash
-# development
-$ npm run start
+**Security auditing.** Every sign-in attempt, password change, role change,
+block and session revocation is written to a security-event log. Failed
+sign-ins are counted twice over — per address and per account — and the
+account locks before the address does, so one attacker cannot lock a whole
+office out by hammering a single username.
 
-# watch mode
-$ npm run start:dev
+**Sessions as first-class objects.** A row per session, revocable one at a
+time or all at once for a user. Every request re-reads whether the user is
+still active, still unblocked and whether their session survives; a revoked
+session stops working immediately rather than when the token expires.
 
-# production mode
-$ npm run start:prod
-```
+**Audit log.** A separate record of what changed — who published a course,
+who enrolled, who changed a role — kept apart from the security events.
 
-## Run tests
+**Analytics.** Aggregates over both logs: failed sign-ins over time, events
+by type and by role, blocking statistics.
 
-```bash
-# unit tests
-$ npm run test
+**Video calls.** WebRTC signalling over socket.io. The socket authenticates
+with the same JWT, rooms carry an invite list, and signalling is only relayed
+between participants of the same room.
 
-# e2e tests
-$ npm run test:e2e
+## Getting started
 
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Requirements: Node.js 20 or newer and bun.
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+git clone https://github.com/MergenUchiha/cybersecurity_of_olp-backend.git
+cd cybersecurity_of_olp-backend
+bun install                    # dependencies only; the scripts below are npm
+
+cp .env.example .env           # then fill in JWT_SECRET
+npm run db:migrate
+npm run db:seed                # demo users, courses, lessons and quizzes
+
+npm run start:dev              # http://localhost:3000/api
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Production
 
-## Resources
+```bash
+npm run build
+npx prisma migrate deploy
+NODE_ENV=production npm run start:prod
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## Configuration
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Every variable is listed in [`.env.example`](.env.example) with a comment, and
+the configuration is validated at startup — a missing or malformed value stops
+the process with a message naming it.
 
-## Support
+| Variable | Notes |
+|---|---|
+| `JWT_SECRET` | Required, at least 32 characters. Generate with `openssl rand -hex 32`. There is deliberately no default: a fallback secret in a public repository lets anyone sign an admin token. |
+| `DATABASE_URL` | The schema targets SQLite; a `postgresql://` URL will not migrate. |
+| `CORS_ORIGINS` | Comma-separated allow-list, used by both the HTTP API and the video socket. Required in production; empty in development permits any localhost port. |
+| `SWAGGER_ENABLED` | Publishes `/api/docs`. Off by default. |
+| `THROTTLE_TTL`, `THROTTLE_LIMIT` | Global rate limit. Sign-in attempts are counted separately from the security-event log. |
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## Access model
 
-## Stay in touch
+Three roles: `STUDENT`, `TEACHER`, `ADMIN`. Every controller sits behind
+`JwtAuthGuard`; the routes below name the role each one additionally requires.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+| Method | Path | Access |
+|---|---|---|
+| POST | `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh` | public |
+| POST | `/api/auth/request-password-reset`, `/api/auth/reset-password` | public |
+| GET | `/api/auth/verify-email` | public |
+| POST | `/api/auth/logout`, `/api/auth/change-password` | any |
+| GET | `/api/auth/profile` | any |
+| GET · PATCH | `/api/users/profile` | any |
+| GET | `/api/users`, `/api/users/:id` | `ADMIN` |
+| PATCH | `/api/users/:id/block`, `/unblock`, `/role`, `/toggle-active` | `ADMIN` |
+| GET | `/api/courses`, `/api/courses/:id` | any |
+| POST · PATCH · DELETE | `/api/courses`, `/api/courses/:id` | `TEACHER`, `ADMIN` |
+| GET | `/api/lessons/course/:courseId`, `/api/lessons/:id` | any |
+| POST · PATCH · DELETE | `/api/lessons/…` | `TEACHER`, `ADMIN` |
+| GET | `/api/quizzes/:id`, `/api/quizzes/my-attempts/all` | any |
+| POST | `/api/quizzes/:quizId/submit` | any |
+| POST · PATCH · DELETE | `/api/quizzes/…` | `TEACHER`, `ADMIN` |
+| GET | `/api/quizzes/:quizId/attempts` | `TEACHER`, `ADMIN` |
+| POST · DELETE | `/api/enrollments/:courseId` | any |
+| GET | `/api/enrollments/my-courses`, `/check/:courseId` | any |
+| GET | `/api/enrollments/course/:courseId` | `TEACHER`, `ADMIN` |
+| GET | `/api/sessions/my-sessions` | any |
+| GET · PATCH | `/api/sessions`, `/api/sessions/:id/revoke` | `ADMIN` |
+| GET | `/api/security-events`, `/api/audit-logs`, `/api/analytics/*` | `ADMIN` |
 
-## License
+The video socket listens on `/video-socket` and expects the access token in
+the socket.io handshake.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Tokens
+
+Access and refresh tokens are both JWTs signed with the same secret, and they
+carry a `type` claim that says which is which — an access token is rejected at
+`/auth/refresh` and a refresh token is rejected everywhere else. Each one also
+carries the id of its session, which is how a refresh is resolved to a single
+database row.
+
+Refresh rotates: the presented session is revoked and a new one issued, with
+the token stored as a bcrypt hash. Signing out revokes the session named in
+the token.
+
+## Scripts
+
+| Script | What it does |
+|---|---|
+| `npm run start:dev` | Watch mode |
+| `npm run start:prod` | Runs the compiled `dist/main` |
+| `npm run build` | Compiles to `dist/` |
+| `npm run lint` | ESLint with type-aware rules, autofixing |
+| `npm run format` | Prettier |
+| `npm run db:migrate` | Creates and applies a migration |
+| `npm run db:seed` | Demo data |
+| `npm run db:studio` | Opens Prisma Studio |
+| `npm test` | Jest |
+
+## Known limitations
+
+- There are no automated tests.
+- The schema stores enums as plain strings, because SQLite has none. Moving to
+  PostgreSQL would let the database enforce them.
+- Email is not sent anywhere: verification and password-reset tokens are
+  created and stored, and delivery is left to be wired up.
+- A role change takes effect when the current access token expires — the role
+  travels inside the token, and only the account's active/blocked state and
+  its session are re-read per request.
