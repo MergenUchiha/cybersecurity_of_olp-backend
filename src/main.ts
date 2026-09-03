@@ -1,32 +1,53 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { loadEnv } from './config/env.validation';
+
+/**
+ * Allowed origins come from CORS_ORIGINS. They used to be a hardcoded list
+ * that included a production IP address, which both leaked the server and
+ * meant a redeploy elsewhere needed a code change.
+ */
+function corsOrigin(raw: string, isProduction: boolean) {
+  const allowList = raw
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const localhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+  return (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
+    if (!origin) return callback(null, true);
+    if (allowList.includes(origin)) return callback(null, true);
+    if (!isProduction && localhost.test(origin)) return callback(null, true);
+    // Withholding the header is what CORS asks for; answering with an error
+    // would turn every unknown origin into a 500.
+    return callback(null, false);
+  };
+}
 
 async function bootstrap() {
+  const env = loadEnv();
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
-  // Security headers
   app.use(helmet());
 
-  // CORS
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:5002',
-      'http://localhost:5173',
-      'http://TURN_SERVER_HOST:5002',
-      'http://localhost:5002',
-    ],
+    origin: corsOrigin(env.CORS_ORIGINS, env.NODE_ENV === 'production'),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global prefix
   app.setGlobalPrefix('api');
 
-  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -35,26 +56,36 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger API documentation
-  const config = new DocumentBuilder()
-    .setTitle('Merdan LMS API')
-    .setDescription('Secure Online Learning Platform API')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management')
-    .addTag('courses', 'Course management')
-    .addTag('lessons', 'Lesson management')
-    .addTag('quizzes', 'Quiz management')
-    .addTag('security', 'Security events')
-    .addTag('analytics', 'Security analytics')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // The filter existed but was never registered, so unhandled errors fell
+  // through to Nest's default handling.
+  app.useGlobalFilters(new AllExceptionsFilter(env.NODE_ENV === 'production'));
 
-  const port = process.env.PORT || 6000;
-  await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Server running on http://0.0.0.0:${port}`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  // The reference lists every route and payload shape, so it stays behind a
+  // flag that defaults to off.
+  if (env.SWAGGER_ENABLED) {
+    const config = new DocumentBuilder()
+      .setTitle('Secure LMS API')
+      .setDescription('Online learning platform with security auditing')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Authentication endpoints')
+      .addTag('users', 'User management')
+      .addTag('courses', 'Course management')
+      .addTag('lessons', 'Lesson management')
+      .addTag('quizzes', 'Quiz management')
+      .addTag('security', 'Security events')
+      .addTag('analytics', 'Security analytics')
+      .build();
+    SwaggerModule.setup(
+      'api/docs',
+      app,
+      SwaggerModule.createDocument(app, config),
+    );
+    logger.log(`Swagger UI on http://localhost:${env.PORT}/api/docs`);
+  }
+
+  await app.listen(env.PORT, '0.0.0.0');
+  logger.log(`Server running on http://0.0.0.0:${env.PORT}`);
 }
-bootstrap();
+
+void bootstrap();
