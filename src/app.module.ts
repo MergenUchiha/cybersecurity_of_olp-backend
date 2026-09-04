@@ -18,6 +18,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { VideoCallsModule } from './modules/video-calls/video-calls.module';
+import { TurnModule } from './modules/turn/turn.module';
 
 // Config
 import { loadEnv } from './config/env.validation';
@@ -50,6 +51,7 @@ import { loadEnv } from './config/env.validation';
     AuditLogsModule,
     AnalyticsModule,
     VideoCallsModule,
+    TurnModule,
   ],
   providers: [
     {

@@ -49,6 +49,15 @@ by type and by role, blocking statistics.
 with the same JWT, rooms carry an invite list, and signalling is only relayed
 between participants of the same room.
 
+**Short-lived TURN credentials.** A relay credential has to reach the browser
+to be usable, so it can never be secret from the user — what matters is that
+it expires. `GET /api/turn-credentials` issues one per call using coturn's
+`use-auth-secret` scheme: the username is an expiry timestamp, the password an
+HMAC of it under a secret only the servers hold. coturn recomputes the HMAC,
+so nothing is stored on either side and a leaked pair stops working on its
+own. Without `TURN_HOST` the endpoint returns STUN alone and calls still
+connect between peers that can reach each other directly.
+
 ## Getting started
 
 Requirements: Node.js 20 or newer and bun.
@@ -86,6 +95,8 @@ the process with a message naming it.
 | `CORS_ORIGINS` | Comma-separated allow-list, used by both the HTTP API and the video socket. Required in production; empty in development permits any localhost port. |
 | `SWAGGER_ENABLED` | Publishes `/api/docs`. Off by default. |
 | `THROTTLE_TTL`, `THROTTLE_LIMIT` | Global rate limit. Sign-in attempts are counted separately from the security-event log. |
+| `TURN_HOST`, `TURN_STATIC_AUTH_SECRET` | The relay and the secret it shares with this service. Set both or neither; the secret must equal coturn's `static-auth-secret`. |
+| `TURN_TTL_SECONDS` | How long an issued credential lasts. Default one hour. |
 
 ## Access model
 
@@ -116,6 +127,7 @@ Three roles: `STUDENT`, `TEACHER`, `ADMIN`. Every controller sits behind
 | GET | `/api/sessions/my-sessions` | any |
 | GET · PATCH | `/api/sessions`, `/api/sessions/:id/revoke` | `ADMIN` |
 | GET | `/api/security-events`, `/api/audit-logs`, `/api/analytics/*` | `ADMIN` |
+| GET | `/api/turn-credentials` | any |
 
 The video socket listens on `/video-socket` and expects the access token in
 the socket.io handshake.
@@ -146,10 +158,16 @@ the token.
 | `npm run db:studio` | Opens Prisma Studio |
 | `npm test` | Jest |
 
+## Tests
+
+`npm test` runs Jest. The suite covers the TURN credential builder, where the
+HMAC is either byte-for-byte right or the relay silently refuses the call —
+not something reading the code settles.
+
 ## Known limitations
 
-- There are no automated tests. Every endpoint was exercised by hand against
-  a running instance.
+- Coverage stops at that one module. Every endpoint was exercised by hand
+  against a running instance instead.
 - The schema stores enums as plain strings, because SQLite has none. Moving to
   PostgreSQL would let the database enforce them.
 - Email is not sent anywhere: verification and password-reset tokens are

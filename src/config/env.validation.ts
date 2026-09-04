@@ -30,6 +30,10 @@ export interface EnvConfig {
   SWAGGER_ENABLED: boolean;
   THROTTLE_TTL: number;
   THROTTLE_LIMIT: number;
+  STUN_URLS: string;
+  TURN_HOST?: string;
+  TURN_STATIC_AUTH_SECRET?: string;
+  TURN_TTL_SECONDS: number;
 }
 
 function readBoolean(
@@ -97,6 +101,20 @@ export function loadEnv(): EnvConfig {
     );
   }
 
+  // A relay is optional - without one, calls fall back to STUN - but half a
+  // configuration is a mistake worth catching at startup.
+  const turnHost = env.TURN_HOST ?? '';
+  const turnSecret = env.TURN_STATIC_AUTH_SECRET ?? '';
+  if (Boolean(turnHost) !== Boolean(turnSecret)) {
+    errors.push(
+      'TURN_HOST and TURN_STATIC_AUTH_SECRET: set both or neither. The secret ' +
+        'must match `static-auth-secret` in the coturn configuration.',
+    );
+  }
+  if (turnSecret && turnSecret.length < 32) {
+    errors.push('TURN_STATIC_AUTH_SECRET: at least 32 characters');
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid environment configuration:\n  - ${errors.join('\n  - ')}`,
@@ -122,6 +140,17 @@ export function loadEnv(): EnvConfig {
       env.THROTTLE_LIMIT,
       'THROTTLE_LIMIT',
       100,
+      errors,
+    ),
+    STUN_URLS:
+      env.STUN_URLS ??
+      'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302',
+    TURN_HOST: turnHost || undefined,
+    TURN_STATIC_AUTH_SECRET: turnSecret || undefined,
+    TURN_TTL_SECONDS: readNumber(
+      env.TURN_TTL_SECONDS,
+      'TURN_TTL_SECONDS',
+      3600,
       errors,
     ),
   };
